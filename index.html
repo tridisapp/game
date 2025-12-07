@@ -1,0 +1,32 @@
+<!DOCTYPE html>
+<html lang="fr">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+  <title>Mini Battle Royale</title>
+  <link rel="stylesheet" href="styles.css" />
+</head>
+<body>
+  <div class="hud">
+    <div class="stats">
+      <div>Vie : <span id="health">100</span></div>
+      <div>Armure : <span id="armor">50</span></div>
+      <div>Munition : <span id="ammo">∞</span></div>
+      <div>Score : <span id="score">0</span></div>
+      <div>Vague : <span id="wave">1</span></div>
+    </div>
+    <div class="help">
+      Z/Q/S/D ou flèches pour se déplacer · Souris pour viser · Clic pour tirer
+    </div>
+  </div>
+  <canvas id="game" width="960" height="600"></canvas>
+  <div class="overlay hidden" id="overlay">
+    <div class="overlay-card">
+      <h1>Game Over</h1>
+      <p id="final-score">Score : 0</p>
+      <button id="restart">Rejouer</button>
+    </div>
+  </div>
+  <script src="game.js"></script>
+</body>
+</html>
