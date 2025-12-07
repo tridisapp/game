@@ -3,7 +3,7 @@
 <head>
   <meta charset="UTF-8" />
   <meta name="viewport" content="width=device-width, initial-scale=1.0" />
-  <title>Mini Battle Royale</title>
+  <title>Mini Battle Royale 3D</title>
   <link rel="stylesheet" href="styles.css" />
 </head>
 <body>
@@ -19,7 +19,9 @@
       Z/Q/S/D ou flèches pour se déplacer · Souris pour viser · Clic pour tirer
     </div>
   </div>
-  <canvas id="game" width="960" height="600"></canvas>
+  <div id="scene-wrapper">
+    <canvas id="game"></canvas>
+  </div>
   <div class="overlay hidden" id="overlay">
     <div class="overlay-card">
       <h1>Game Over</h1>
@@ -27,6 +29,7 @@
       <button id="restart">Rejouer</button>
     </div>
   </div>
+  <script src="https://cdn.jsdelivr.net/npm/three@0.165.0/build/three.min.js"></script>
   <script src="game.js"></script>
 </body>
 </html>
