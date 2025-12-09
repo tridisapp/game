@@ -1,35 +1,9 @@
 const canvas = document.getElementById('game');
-const renderer = new THREE.WebGLRenderer({ canvas, antialias: true });
-renderer.setSize(960, 600);
-renderer.setPixelRatio(window.devicePixelRatio || 1);
-
-const scene = new THREE.Scene();
-scene.background = new THREE.Color('#060c15');
-
-const camera = new THREE.PerspectiveCamera(60, 960 / 600, 0.1, 1000);
-camera.position.set(0, 220, 260);
-camera.lookAt(0, 0, 0);
-
-const ambient = new THREE.AmbientLight(0x88aaff, 0.5);
-scene.add(ambient);
-
-const dirLight = new THREE.DirectionalLight(0xffffff, 1.1);
-dirLight.position.set(-80, 120, 80);
-scene.add(dirLight);
-
-const grid = new THREE.GridHelper(320, 16, 0x13d8ff, 0x0a2236);
-grid.position.y = 0.01;
-scene.add(grid);
-
-const floorGeo = new THREE.PlaneGeometry(320, 200);
-const floorMat = new THREE.MeshStandardMaterial({
-  color: '#0b1f2e',
-  metalness: 0.1,
-  roughness: 0.8,
-});
-const floor = new THREE.Mesh(floorGeo, floorMat);
-floor.rotation.x = -Math.PI / 2;
-scene.add(floor);
+const ctx = canvas.getContext('2d');
+const width = 960;
+const height = 600;
+canvas.width = width;
+canvas.height = height;
 
 const ui = {
   health: document.getElementById('health'),
@@ -44,17 +18,9 @@ const ui = {
 
 const world = { width: 320, height: 200 };
 
-const playerGeo = new THREE.CylinderGeometry(8, 8, 16, 12);
-const playerMat = new THREE.MeshStandardMaterial({ color: '#21f0b6', emissive: '#082b2d' });
-const playerMesh = new THREE.Mesh(playerGeo, playerMat);
-playerMesh.castShadow = true;
-playerMesh.receiveShadow = true;
-scene.add(playerMesh);
-
 const player = {
   x: 0,
   z: 0,
-  y: 8,
   speed: 110,
   radius: 10,
   health: 100,
@@ -77,10 +43,8 @@ let enemies = [];
 let score = 0;
 let wave = 1;
 let timeSinceLastShot = 0;
-let mouse = new THREE.Vector2();
-const raycaster = new THREE.Raycaster();
-const groundPlane = new THREE.Plane(new THREE.Vector3(0, 1, 0), 0);
-let aimPoint = new THREE.Vector3(0, 0, 0);
+let mouse = { x: 0, y: 0 };
+let aimPoint = { x: 0, z: 0 };
 
 function resetGame() {
   player.x = 0;
@@ -88,8 +52,6 @@ function resetGame() {
   player.health = 100;
   player.armor = 50;
   player.dead = false;
-  bullets.forEach((b) => scene.remove(b.mesh));
-  enemies.forEach((e) => scene.remove(e.mesh));
   bullets = [];
   enemies = [];
   score = 0;
@@ -125,22 +87,15 @@ function spawnWave() {
 function createEnemy(x, z) {
   const baseSpeed = 40 + wave * 5;
   const baseHealth = 40 + wave * 8;
-  const geo = new THREE.BoxGeometry(14, 14, 14);
-  const mat = new THREE.MeshStandardMaterial({ color: '#ff4757', emissive: '#2e0b0d' });
-  const mesh = new THREE.Mesh(geo, mat);
-  mesh.position.set(x, 7, z);
-  scene.add(mesh);
   return {
     x,
     z,
-    y: 7,
     radius: 10,
     health: baseHealth,
     speed: baseSpeed,
     color: '#ff4757',
     hitTimer: 0,
     damage: 18,
-    mesh,
   };
 }
 
@@ -184,22 +139,14 @@ function shoot(target) {
   timeSinceLastShot = 0;
 
   const angle = Math.atan2(target.x - player.x, target.z - player.z) + (Math.random() - 0.5) * player.weapon.spread;
-  const dir = new THREE.Vector3(Math.sin(angle), 0, Math.cos(angle));
-  const mesh = new THREE.Mesh(
-    new THREE.SphereGeometry(3, 10, 10),
-    new THREE.MeshStandardMaterial({ color: '#f8f9fa', emissive: '#4fd1c5' })
-  );
-  mesh.position.set(player.x + dir.x * player.radius, player.y, player.z + dir.z * player.radius);
-  scene.add(mesh);
+  const dir = { x: Math.sin(angle), z: Math.cos(angle) };
   bullets.push({
-    x: mesh.position.x,
-    z: mesh.position.z,
-    y: player.y,
+    x: player.x + dir.x * player.radius,
+    z: player.z + dir.z * player.radius,
     vx: dir.x * player.weapon.bulletSpeed,
     vz: dir.z * player.weapon.bulletSpeed,
     life: player.weapon.bulletLifetime,
     damage: player.weapon.damage,
-    mesh,
   });
 }
 
@@ -208,26 +155,24 @@ function updateBullets(dt) {
     b.x += b.vx * dt;
     b.z += b.vz * dt;
     b.life -= dt;
-    b.mesh.position.set(b.x, b.y, b.z);
 
     if (Math.abs(b.x) > world.width / 2 || Math.abs(b.z) > world.height / 2) {
-      scene.remove(b.mesh);
       return false;
     }
     if (b.life <= 0) {
-      scene.remove(b.mesh);
       return false;
     }
 
-    for (const enemy of enemies) {
+    enemies = enemies.filter((enemy) => {
       const dist = Math.hypot(enemy.x - b.x, enemy.z - b.z);
-      if (dist < enemy.radius + 4) {
+      if (dist < enemy.radius + 3) {
         enemy.health -= b.damage;
-        enemy.hitTimer = 0.15;
-        scene.remove(b.mesh);
-        return false;
+        enemy.hitTimer = 0.25;
+        return enemy.health > 0;
       }
-    }
+      return true;
+    });
+
     return true;
   });
 }
@@ -238,7 +183,6 @@ function updateEnemies(dt) {
     const [dx, dz] = normalize(player.x - enemy.x, player.z - enemy.z);
     enemy.x += dx * enemy.speed * dt;
     enemy.z += dz * enemy.speed * dt;
-    enemy.mesh.position.set(enemy.x, enemy.y, enemy.z);
 
     const dist = Math.hypot(enemy.x - player.x, enemy.z - player.z);
     if (dist < enemy.radius + player.radius) {
@@ -254,12 +198,9 @@ function updateEnemies(dt) {
 
     if (enemy.health <= 0) {
       score += 10;
-      scene.remove(enemy.mesh);
       return false;
     }
 
-    const emissiveStrength = enemy.hitTimer > 0 ? 0.6 : 0.15;
-    enemy.mesh.material.emissiveIntensity = emissiveStrength;
     return true;
   });
 
@@ -270,22 +211,11 @@ function updateEnemies(dt) {
 }
 
 function updateAimPoint() {
-  raycaster.setFromCamera(mouse, camera);
-  const intersection = new THREE.Vector3();
-  raycaster.ray.intersectPlane(groundPlane, intersection);
-  aimPoint.copy(intersection);
-}
-
-function updatePlayerMesh() {
-  playerMesh.position.set(player.x, player.y, player.z);
-  const lookTarget = new THREE.Vector3(aimPoint.x, player.y, aimPoint.z);
-  playerMesh.lookAt(lookTarget);
-}
-
-function updateCamera() {
-  const desiredPos = new THREE.Vector3(player.x, 200, player.z + 220);
-  camera.position.lerp(desiredPos, 0.08);
-  camera.lookAt(new THREE.Vector3(player.x, 0, player.z));
+  const rect = canvas.getBoundingClientRect();
+  const normX = ((mouse.x - rect.left) / rect.width) * 2 - 1;
+  const normY = ((mouse.y - rect.top) / rect.height) * 2 - 1;
+  aimPoint.x = normX * (world.width / 2);
+  aimPoint.z = normY * (world.height / 2);
 }
 
 function gameOver() {
@@ -297,11 +227,9 @@ function gameOver() {
 function update(dt) {
   if (player.dead) return;
   handleInput(dt);
+  updateAimPoint();
   updateBullets(dt);
   updateEnemies(dt);
-  updateAimPoint();
-  updatePlayerMesh();
-  updateCamera();
   timeSinceLastShot += dt;
   if (player.health <= 0) {
     gameOver();
@@ -309,8 +237,88 @@ function update(dt) {
   updateUI();
 }
 
+function worldToScreen({ x, z }) {
+  return {
+    x: width / 2 + (x / (world.width / 2)) * (width / 2 - 20),
+    y: height / 2 + (z / (world.height / 2)) * (height / 2 - 20),
+  };
+}
+
+function drawBackground() {
+  const gradient = ctx.createLinearGradient(0, 0, width, height);
+  gradient.addColorStop(0, '#0b1a27');
+  gradient.addColorStop(1, '#051420');
+  ctx.fillStyle = gradient;
+  ctx.fillRect(0, 0, width, height);
+
+  ctx.strokeStyle = 'rgba(0, 255, 255, 0.15)';
+  ctx.lineWidth = 1;
+  const stepX = width / 16;
+  const stepY = height / 10;
+  for (let i = 0; i <= 16; i++) {
+    const x = i * stepX;
+    ctx.beginPath();
+    ctx.moveTo(x, 0);
+    ctx.lineTo(x, height);
+    ctx.stroke();
+  }
+  for (let j = 0; j <= 10; j++) {
+    const y = j * stepY;
+    ctx.beginPath();
+    ctx.moveTo(0, y);
+    ctx.lineTo(width, y);
+    ctx.stroke();
+  }
+}
+
+function drawPlayer() {
+  const screen = worldToScreen(player);
+  const angle = Math.atan2(aimPoint.x - player.x, aimPoint.z - player.z);
+  const size = 14;
+
+  ctx.save();
+  ctx.translate(screen.x, screen.y);
+  ctx.rotate(-angle);
+  ctx.fillStyle = player.color;
+  ctx.beginPath();
+  ctx.moveTo(0, -size);
+  ctx.lineTo(size * 0.7, size);
+  ctx.lineTo(-size * 0.7, size);
+  ctx.closePath();
+  ctx.fill();
+  ctx.restore();
+}
+
+function drawEnemies() {
+  enemies.forEach((enemy) => {
+    const screen = worldToScreen(enemy);
+    const size = 14;
+    ctx.save();
+    ctx.translate(screen.x, screen.y);
+    const baseColor = enemy.hitTimer > 0 ? '#ff6b81' : enemy.color;
+    ctx.fillStyle = baseColor;
+    ctx.shadowColor = 'rgba(255, 71, 87, 0.6)';
+    ctx.shadowBlur = 10;
+    ctx.fillRect(-size, -size, size * 2, size * 2);
+    ctx.restore();
+  });
+}
+
+function drawBullets() {
+  ctx.fillStyle = '#f8f9fa';
+  bullets.forEach((b) => {
+    const screen = worldToScreen(b);
+    ctx.beginPath();
+    ctx.arc(screen.x, screen.y, 3, 0, Math.PI * 2);
+    ctx.fill();
+  });
+}
+
 function render() {
-  renderer.render(scene, camera);
+  drawBackground();
+  drawEnemies();
+  drawPlayer();
+  drawBullets();
 }
 
 function loop(timestamp) {
@@ -322,9 +330,8 @@ function loop(timestamp) {
 }
 
 function onMouseMove(e) {
-  const rect = canvas.getBoundingClientRect();
-  mouse.x = ((e.clientX - rect.left) / rect.width) * 2 - 1;
-  mouse.y = -((e.clientY - rect.top) / rect.height) * 2 + 1;
+  mouse.x = e.clientX;
+  mouse.y = e.clientY;
 }
 
 function onClick() {
@@ -332,11 +339,8 @@ function onClick() {
 }
 
 window.addEventListener('resize', () => {
-  const width = 960;
-  const height = 600;
-  renderer.setSize(width, height);
-  camera.aspect = width / height;
-  camera.updateProjectionMatrix();
+  canvas.width = width;
+  canvas.height = height;
 });
 
 canvas.addEventListener('mousemove', onMouseMove);
